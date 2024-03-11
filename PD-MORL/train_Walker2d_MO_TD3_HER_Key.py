@@ -10,6 +10,7 @@ import torch.multiprocessing as mp
 import os
 
 sys.path.append('../')
+sys.path.append('./')
 from tqdm import tqdm
 import lib
 
@@ -195,7 +196,8 @@ def main_parallel(process_count, reward_size):
     return train_queue_list, data_proc_list
 
 if __name__ == "__main__":
-    process_count = 3 # Number of key preferences
+    #process_count = 3 # Number of key preferences
+    process_count = 1
     reward_size = 2 # 2 objective problem
     train_queue_list, data_proc_list = main_parallel(process_count, reward_size)
     results = np.zeros((process_count,reward_size))

@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "loadCudaModule",
+        "type": "shell",
+        "command": "module",
+        "args": ["load", "cuda/11.8"],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      }
+    ]
+  }
+  

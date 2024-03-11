@@ -543,7 +543,7 @@ class MO_TD3_HER_Key:
         critic_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm= 100)
         self.critic_optimizer.step()
-
+        # return
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
             # Compute Actor Loss

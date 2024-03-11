@@ -1,4 +1,4 @@
-name: pdmorl
+name: pdmorl2
 channels:
   - pytorch
   - anaconda
