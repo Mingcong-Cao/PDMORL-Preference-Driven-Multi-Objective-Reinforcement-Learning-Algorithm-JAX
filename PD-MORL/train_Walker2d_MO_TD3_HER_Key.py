@@ -22,6 +22,7 @@ import gym
 import moenvs
 import itertools
 from collections import namedtuple
+from torch.utils.tensorboard import SummaryWriter
 
 def generate_w_batch_test(step_size, reward_size):
     mesh_array = []
@@ -76,6 +77,29 @@ def child_process(preference, p_id,train_queue):
         args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
         args.p_id = p_id
         
+        track = True
+        writer = None
+        if track:
+            import wandb
+            project_name = "Walker2d" 
+            entity = None
+            args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
+            wandb.init(
+                    project=project_name,
+                    entity= entity,
+                    sync_tensorboard=True,
+                    config=vars(args),
+                    name= f"TD3_HER_KEY__torch__{args.scenario_name}__seed{args.seed}__pid{args.p_id}__{int(time.time())}",
+                    monitor_gym=True,
+                    save_code=True,
+                )
+            writer = SummaryWriter(f"TD3_HER_KEY__torch__{args.scenario_name}__seed{args.seed}__pid{args.p_id}__{int(time.time())}")
+            writer.add_text(
+                "hyperparameters",
+                "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+            )
+
+
         device = torch.device("cuda" if args.cuda else "cpu")
         args.device = device
         # setup the environment
@@ -137,7 +161,11 @@ def child_process(preference, p_id,train_queue):
             agent.learn(batch,writer=None)
             
             new_rewards = exp_source.pop_total_rewards()
-
+            if ts % 1000 == 0:
+                #wrtie results
+                if writer:
+                    now_time = time.time()
+                    writer.add_scalar("charts/SPS", ts/(now_time - start_time), ts)
             if new_rewards:
                 done_episodes += 1
                 # Evaluate agent
@@ -154,6 +182,8 @@ def child_process(preference, p_id,train_queue):
                     print("\n---------------------------------------")
                     print(f"Process {args.p_id} - Evaluation Episode {done_episodes}: Reward: {np.round(avg_reward_mean,2)}(std: +-{avg_reward_std}), Multi-Objective Reward: {avg_multi_obj_mean}(std: +-{avg_multi_obj_std}), Max_Metric: {max_multi_obj_reward}, Preference: {preference}")
                     print("---------------------------------------")
+                    if writer:
+                        writer.add_scalar("charts/reward_mean", avg_reward_mean, ts)
         
         
         avg_reward, avg_multi_obj = eval_agent(test_env, agent, args, preference, eval_episodes = 10)
@@ -197,7 +227,7 @@ def main_parallel(process_count, reward_size):
 
 if __name__ == "__main__":
     #process_count = 3 # Number of key preferences
-    process_count = 1
+    process_count = 3
     reward_size = 2 # 2 objective problem
     train_queue_list, data_proc_list = main_parallel(process_count, reward_size)
     results = np.zeros((process_count,reward_size))

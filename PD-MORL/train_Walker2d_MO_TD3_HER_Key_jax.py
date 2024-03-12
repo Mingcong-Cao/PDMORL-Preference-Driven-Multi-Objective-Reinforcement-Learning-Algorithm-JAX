@@ -22,7 +22,7 @@ import gym
 import moenvs
 import itertools
 from collections import namedtuple
-
+from torch.utils.tensorboard import SummaryWriter
 #jax related
 import chex
 import flashbax as fbx
@@ -34,6 +34,7 @@ from flax.training.train_state import TrainState
 from typing import Any, Callable, Sequence, Optional
 from functools import partial
 from flax import struct
+
 
 class TrainState_actor(TrainState):
     target_params: flax.core.FrozenDict
@@ -89,16 +90,6 @@ def eval_agent(test_env, get_action, actor_state, args, preference, key, eval_ep
 
 Queue_obj = namedtuple('Queue_obj', ['avg_reward', 'avg_multi_obj','process_ID'])
 
-# def generate_training_functions(
-#     deterministic: bool,
-#     action_shape: int,
-#     expl_noise: float,
-#     actor_state: TrainState,
-#     states: np.ndarray,
-#     preference: np.ndarray,
-#     max_action: np.ndarray,
-#     key: jnp.ndarray,
-# ):
 
 def generate_training_functions(
     action_shape: int,
@@ -118,7 +109,7 @@ def generate_training_functions(
             actions = actor_state.apply_fn(actor_state.params, states.reshape((1, np.prod(states.shape))), preference.reshape((1, np.prod(preference.shape)))).flatten()
             # TD3 Exploration
             preference = preference + (jax.random.normal(noise_key_pref, (preference.shape))*0.05).clip(-0.05, 0.05)
-            preference = jnp.abs(preference)/jnp.linalg.norm(preference)
+            preference = jnp.abs(preference)/jnp.linalg.norm(preference, ord = 1)
             print(actions)
             actions = actions + jax.random.normal(noise_key_ac, (action_shape,)) * jnp.sqrt(max_action * expl_noise)
             actions = actions.clip(-max_action,max_action)
@@ -151,8 +142,8 @@ def generate_learning_functions(
         #calculate the target Q values
         key, noise_key = jax.random.split(key, 2)
         noise = (jax.random.uniform(noise_key, actions.shape)*policy_noise).clip(-noise_clip, noise_clip)
-        next_action_batch = (actor_state.apply_fn(actor_state.target_params, states, w_batch) + noise).clip(-max_action, max_action)
-        target_Q1, target_Q2 = critic_state.apply_fn(critic_state.target_params, states, w_batch, next_action_batch)
+        next_action_batch = (actor_state.apply_fn(actor_state.target_params, next_states, w_batch) + noise).clip(-max_action, max_action)
+        target_Q1, target_Q2 = critic_state.apply_fn(critic_state.target_params, next_states, w_batch, next_action_batch)
         wTauQ1 = jax.lax.batch_matmul(jnp.expand_dims(w_batch, 1), jnp.expand_dims(target_Q1, 2)).squeeze(1)
         wTauQ2 = jax.lax.batch_matmul(jnp.expand_dims(w_batch, 1), jnp.expand_dims(target_Q2, 2)).squeeze(1)
         # print(target_Q1.shape, wTauQ1.shape)
@@ -193,21 +184,37 @@ def generate_learning_functions(
         critic_state = critic_state.replace(
             target_params = optax.incremental_update(critic_state.params, critic_state.target_params, tau)
         )
-        # qf1_state = qf1_state.replace(
-        #     target_params=optax.incremental_update(qf1_state.params, qf1_state.target_params, args.tau)
-        # )
-        # qf2_state = qf2_state.replace(
-        #     target_params=optax.incremental_update(qf2_state.params, qf2_state.target_params, args.tau)
-        # )
         return actor_state, critic_state, actor_loss_value
     return learn_critic, learn_actor
 
-def child_process(preference, p_id,train_queue):
+def child_process(preference, p_id, train_queue):
 
     start_time = time.time()
     args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
     args.p_id = p_id
     
+    track = False
+    writer = None
+    if track:
+        import wandb
+        project_name = "Walker2d" 
+        entity = None
+        args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
+        wandb.init(
+                project=project_name,
+                entity= entity,
+                sync_tensorboard=True,
+                config=vars(args),
+                name= f"TD3_HER_KEY__{args.scenario_name}__seed{args.seed}__pid{args.p_id}__{int(time.time())}",
+                monitor_gym=True,
+                save_code=True,
+            )
+        writer = SummaryWriter(f"TD3_HER_KEY__jax__{args.scenario_name}__seed{args.seed}__pid{args.p_id}__{int(time.time())}")
+        writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        )
+
     #we don't need device for jax
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
@@ -274,27 +281,12 @@ def child_process(preference, p_id,train_queue):
         tx=optax.chain(optax.clip_by_global_norm(max_norm = 100), optax.adam(learning_rate=args.lr_critic)),
     )
 
-    # replay_buffer = fbx.make_flat_buffer(max_length=args.replay_size, min_length=2*args.batch_size, sample_batch_size=args.batch_size)
-    #initialize by creating fake experience to infer the shape of the replay buffer
-    # fake_exp = Experience(state=state_dum[0], action=action_dum[0], reward=jnp.ones(args.reward_size), next_state=state_dum[0], terminal=False, preference=preference_dum[0], step_idx=0, p_id=0) 
-    # buffer_state = replay_buffer.init(fake_exp)
-
-    #Main Objects
-
     #Edit the neural network model name
     args.name_model = args.name + " -Key"
     
-    #Initialize RL agent
-    # agent = ptan.agent.MO_TD3_HER_Key(actor,critic, device, args)
-        
-    #Initialize Experience Source and Replay Buffer
-    # exp_source = ptan.experience.MORLExperienceSource(env, agent, args, steps_count=1)
-    # Fix the key preference
-    # exp_source.multi_objective_key = True
-    # exp_source.multi_objective_key_preference = preference
+    #Initialize Replay Buffer
     replay_buffer = ptan.experience_jax.ExperienceReplayBuffer(buffer_size = args.replay_size)
     
-
     # Main Loop
     done_episodes = 0
     max_metric = 0
@@ -318,18 +310,11 @@ def child_process(preference, p_id,train_queue):
     total_rewards = []
     total_steps = []
 
-    gradient_transformer = optax.clip_by_global_norm(max_norm = 100)
-    actor_gradient_transformer = gradient_transformer.init(params=actor_state.params)
-    critic_gradient_transformer = gradient_transformer.init(params=critic_state.params)
     #initialize functions
-    get_action = generate_training_functions( #deterministic = False,
+    get_action = generate_training_functions(
                                 action_shape = args.action_shape,
                                 expl_noise =args.expl_noise,
-                                #actor_state =actor_state,
-                                #states = s,
-                                #preference = preference,
                                 max_action = args.max_action,
-                                #key = key,
     )
     learn_critic, learn_actor = generate_learning_functions(
         policy_noise = args.policy_noise,
@@ -339,31 +324,12 @@ def child_process(preference, p_id,train_queue):
         tau = args.tau,
     )
 
+    start_time = time.time()
     for ts in tqdm(range(0, args.time_steps), disable=disable): #iterate through the fixed number of timesteps
-        
-        # Populate transitions
-        ##need to implement here
-        # replay_buffer.populate(1) is :
-        # for _ in range(samples):
-        #     entry = next(self.experience_source_iter)                
-        #     self._add(entry)
 
-        #1. implement this action = self.agent(s, preference = self.multi_objective_key_preference)
-        #get action from fixed preference
-            
-        # else:
-        # preference_ep, action, key = get_action(deterministic = False,
-        #                         action_shape = args.action_shape,
-        #                         expl_noise =args.expl_noise,
-        #                         actor_state =actor_state,
-        #                         states = s,
-        #                         preference = preference,
-        #                         max_action = args.max_action,
-        #                         key = key,
-        #                         )
         preference_ep = preference
         if global_steps < args.start_timesteps:
-             action = env.action_space.sample()
+            action = env.action_space.sample()
         else:
             preference_ep, action, key = get_action(deterministic = False, actor_state =actor_state, states = s, preference = preference, key = key)
         
@@ -455,8 +421,15 @@ def child_process(preference, p_id,train_queue):
             critic_state = critic_state,
             key = key            
             )
-            # if global_steps % 1000 == 0:
-            #     print(critic_loss, actor_loss)
+            if global_steps % 5000 == 0:
+                print(f"pref: {preference_ep}critic_l: {critic_loss} Q1: {current_Q1_mean} Q2: {current_Q2_mean} actor_l: {actor_loss}")
+
+        if global_steps % 1000 == 0:
+            #wrtie results
+            if writer:
+                now_time = time.time()
+                writer.add_scalar("charts/SPS", ts/(now_time - start_time), global_steps)
+
     
         # new_rewards = exp_source.pop_total_rewards()
 
@@ -477,6 +450,8 @@ def child_process(preference, p_id,train_queue):
                 print("\n---------------------------------------")
                 print(f"Process {args.p_id} - Evaluation Episode {done_episodes}: Reward: {np.round(avg_reward_mean,2)}(std: +-{avg_reward_std}), Multi-Objective Reward: {avg_multi_obj_mean}(std: +-{avg_multi_obj_std}), Max_Metric: {max_multi_obj_reward}, Preference: {preference}")
                 print("---------------------------------------")
+                if writer:
+                    writer.add_scalar("charts/reward_mean", avg_reward_mean, global_steps)
     
     
     avg_reward, avg_multi_obj, key = eval_agent(test_env, get_action, actor_state, args, preference, key, eval_episodes = 10)
@@ -519,6 +494,7 @@ def main_parallel(process_count, reward_size):
     return train_queue_list, data_proc_list
 
 if __name__ == "__main__":
+
     # process_count = 3 # Number of key preferences
     #set the memory allocation for jax to avoid OOM error
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".25"

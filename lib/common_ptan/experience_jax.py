@@ -126,7 +126,7 @@ class ExperienceReplayBuffer:
             self.buffer.append(sample)
         else: 
             self.buffer.pop(0)
-            self.buffer.append(sample[0])
+            self.buffer.append(sample)
 
     # def populate(self, samples):
     #     """
