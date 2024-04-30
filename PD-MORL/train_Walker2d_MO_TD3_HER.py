@@ -11,6 +11,8 @@ import torch.optim as optim
 import torch.multiprocessing as mp
 import os
 
+
+sys.path.append('./')
 sys.path.append('../')
 from tqdm import tqdm
 import lib
@@ -192,10 +194,10 @@ if __name__ == "__main__":
                 eval_cnt +=1
                 hypervolume, sparsity, objs = lib.utilities.MORL_utils.eval_agent(test_env_main, agent_main, w_batch_eval, args, eval_episodes=args.eval_episodes)
                 print(f"Time steps of Each Process: {process_step_array}, Episode Count of Each Process: {process_episode_array}")
-                #Store episode results and write to tensorboard
+                # #Store episode results and write to tensorboard
                 lib.utilities.MORL_utils.store_results( [], hypervolume, sparsity, time_step, writer, args)
-                lib.utilities.common_utils.save_model(actor, args, name = name, ext ='actor_{}'.format(time_step))
-                lib.utilities.common_utils.save_model(critic, args, name = name,ext ='critic_{}'.format(time_step))
+                #lib.utilities.common_utils.save_model(actor, args, name = name, ext ='actor_{}'.format(time_step))
+                #lib.utilities.common_utils.save_model(critic, args, name = name,ext ='critic_{}'.format(time_step))
                 lib.utilities.MORL_utils.plot_objs(args,objs,ext='{}'.format(time_step))
     finally:
         for p in data_proc_list:

@@ -145,21 +145,21 @@ class ExperienceReplayBuffer_HER_MO(ExperienceReplayBuffer):
     """
     Multi-objective Hindsight Experience Replay Buffer 
     """
-    def __init__(self, experience_source, args):
-        assert isinstance(experience_source, (MORLExperienceSource,type(None)))
-        super().__init__(experience_source, args.replay_size)
+    def __init__(self, args):
+        # assert isinstance(experience_source, (MORLExperienceSource,type(None)))
+        super().__init__(args.replay_size)
         self.args = args
-        self.experience_source = experience_source
+        # self.experience_source = experience_source
         self.time_steps = args.time_steps
         self.ep_p = np.zeros((args.process_count))
         self.w_all_count = 0
     
     
-    def populate(self, samples):
+    def populate(self, sample):
         """
-        Populates samples into the buffer
+        Populates one samples into the buffer
         """
-        self._add(samples) 
+        self._add(sample) 
     
     
     
@@ -177,7 +177,7 @@ class ExperienceReplayBuffer_HER_MO(ExperienceReplayBuffer):
         w_batch = np.abs(w_batch_rnd) / np.linalg.norm(w_batch_rnd, ord=1, axis=1, keepdims=True)
         w_batch = np.round(w_batch,3)
         
-        samples = sample*(self.args.weight_num+1)
+        samples = [sample]*(self.args.weight_num+1)
         if len(self.buffer) < self.capacity:
             self.buffer.append(samples[-1])
             if len(self.buffer) > self.args.start_timesteps*self.args.process_count:

@@ -36,8 +36,9 @@ from flax.training.train_state import TrainState
 from typing import Any, Callable, Sequence, Optional
 from functools import partial
 from flax import struct
+from datetime import datetime
 
-
+jax.default_device(jax.devices()[1])
 Queue_obj = namedtuple('Queue_obj', ['ep_samples', 'time_step','ep_cnt','process_ID'])
 Experience = namedtuple('Experience', ['state', 'action', 'reward', 'next_state','terminal', 'preference', 'step_idx'])    
 
@@ -132,10 +133,11 @@ def generate_learning_functions(
             #originally we use smooth_l1_loss in pytorch with beta = 1.
             #here we replace it with huber loss with del = 1, which is identical
             current_Q1, current_Q2 = critic_state.apply_fn(params, states, w_batch, actions)
-            angle_term_1 = jnp.arccos(cosine_similarity(w_batch_interp, current_Q1).clip(0,0.999)) * 180 / jnp.pi #rad to degree
-            angle_term_2 = jnp.arccos(cosine_similarity(w_batch_interp, current_Q2).clip(0,0.999)) * 180 / jnp.pi
-            return (optax.huber_loss(current_Q1, target_Q) + optax.huber_loss(current_Q2, target_Q)).mean() + \
-                angle_term_1.mean() + angle_term_2.mean() , (current_Q1.mean(), current_Q2.mean(), angle_term_1.mean(), angle_term_2.mean())
+            #try different angle term here
+            angle_term_1 = 45 * cosine_similarity(w_batch_interp, current_Q1) #rad to degree
+            angle_term_2 = 45 * cosine_similarity(w_batch_interp, current_Q2)
+            return (optax.huber_loss(current_Q1, target_Q) + optax.huber_loss(current_Q2, target_Q)).mean() \
+                 - angle_term_1.mean() - angle_term_2.mean() , (current_Q1.mean(), current_Q2.mean(), angle_term_1.mean(), angle_term_2.mean())
         
         (critic_loss, (current_Q1_mean, current_Q2_mean, angle_term_1_mean, angle_term_2_mean)), grads = jax.value_and_grad(calc_loss, has_aux=True)(critic_state.params)
         critic_state = critic_state.apply_gradients(grads=grads)
@@ -155,8 +157,8 @@ def generate_learning_functions(
         def actor_loss(params):
             Q1_critic = critic_state.apply_fn(critic_state.params, states, w_batch, actor_state.apply_fn(params, states, w_batch),  method = critic_state.Q1)
             wQ1 = jax.lax.batch_matmul(jnp.expand_dims(w_batch, 1), jnp.expand_dims(Q1_critic, 2)).squeeze(1)
-            angle_term = jnp.arccos(cosine_similarity(w_batch_interp, Q1_critic).clip(0,0.9999)) * 180 / jnp.pi
-            return (-wQ1).mean() + actor_loss_coeff * angle_term.mean(), angle_term.mean()
+            angle_term = 45 * cosine_similarity(w_batch_interp, Q1_critic)
+            return (-wQ1).mean() - actor_loss_coeff * angle_term.mean(), angle_term.mean()
         #below in this function not modified yet
         (actor_loss_value, angle_term_mean), grads = jax.value_and_grad(actor_loss, has_aux=True)(actor_state.params)
         actor_state = actor_state.apply_gradients(grads=grads)
@@ -207,7 +209,7 @@ if __name__ == "__main__":
     # torch.set_num_threads(PROCESSES_COUNT)
 
     #TODO: need to modify/this is just for test purpose
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".25"
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".1"
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -361,6 +363,10 @@ if __name__ == "__main__":
     
     s_all = envs.reset()
     total_learning_steps = 0
+
+    figure_dir = 'Figures/{}/{}'.format(args.scenario_name, log_dir.split('/')[1])
+    if not os.path.exists(figure_dir):
+        os.mkdir(figure_dir)
     try:
         for ts in tqdm(range(0, args.time_steps)): #iterate through the fixed number of timesteps
 
@@ -466,15 +472,15 @@ if __name__ == "__main__":
                 eval_cnt +=1
                 hypervolume, sparsity, objs, key = MORL_utils_jax.eval_agent(test_env_main, w_batch_eval ,get_action, actor_state, args, key, eval_episodes = args.eval_episodes)
                 file_ext='{}'.format(time_step)
-                numpy_filename = 'Figures/{}/{}-ParetoFront, ExpNoise={}, PolicyUpdateFreq={}_{}.npy'.format(args.scenario_name,args.plot_name,args.expl_noise,args.policy_freq,file_ext)
-                with open(numpy_filename, 'wb') as f:
-                    np.save(f, objs)
+                
+
+                
                 print(f"Time steps of Each Process: {process_step_array}, Episode Count of Each Process: {process_episode_array}")
                 #Store episode results and write to tensorboard
                 MORL_utils_jax.store_results( [], hypervolume, sparsity, time_step, writer, args)
                 # lib.utilities.common_utils.save_model(actor, args, name = name, ext ='actor_{}'.format(time_step))
                 # lib.utilities.common_utils.save_model(critic, args, name = name,ext ='critic_{}'.format(time_step))
-                MORL_utils_jax.plot_objs(args,objs,ext='{}'.format(time_step))
+                MORL_utils_jax.plot_objs(args,objs, figure_dir, ext='{}'.format(time_step))
                         
        
             

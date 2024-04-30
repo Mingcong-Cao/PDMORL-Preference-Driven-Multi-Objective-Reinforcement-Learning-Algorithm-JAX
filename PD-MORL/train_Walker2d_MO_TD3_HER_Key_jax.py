@@ -193,7 +193,7 @@ def child_process(preference, p_id, train_queue):
     args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
     args.p_id = p_id
     
-    track = False
+    track = True
     writer = None
     if track:
         import wandb
@@ -498,7 +498,7 @@ if __name__ == "__main__":
     # process_count = 3 # Number of key preferences
     #set the memory allocation for jax to avoid OOM error
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".25"
-    process_count = 1 # setting processes num to only 1, debug use only
+    process_count = 3 # setting processes num to only 1, debug use only
     reward_size = 2 # 2 objective problem
     train_queue_list, data_proc_list = main_parallel(process_count, reward_size)
     results = np.zeros((process_count,reward_size))
@@ -511,7 +511,7 @@ if __name__ == "__main__":
         p.terminate()
         p.join() 
 
-    f = open('interp_objs_walker2d.txt', 'w')
+    f = open('interp_objs_walker2d_jax.txt', 'w')
     for t in results:
         line = ','.join(str(x) for x in t)
         f.write(line +' \n')

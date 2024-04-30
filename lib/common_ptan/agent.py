@@ -348,8 +348,13 @@ class MO_TD3_HER:
         critic_loss = angle_term_1.mean() +  F.smooth_l1_loss(current_Q1, target_Q) + \
                     angle_term_2.mean() +  F.smooth_l1_loss(current_Q2, target_Q)
         # Optimize the critic
+        critic_total_norm = 0
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        for p in self.critic.parameters():
+            param_norm = p.grad.detach().data.norm(2)
+            critic_total_norm += param_norm.item() ** 2
+        critic_total_norm = critic_total_norm ** 0.5
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm= 100)
         self.critic_optimizer.step()
 
@@ -370,12 +375,16 @@ class MO_TD3_HER:
             # Optimize the actor
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
-            
+            actor_total_norm = 0
+            for p in self.actor.parameters():
+                param_norm = p.grad.detach().data.norm(2)
+                actor_total_norm += param_norm.item() ** 2
+            actor_total_norm = actor_total_norm ** 0.5
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm= 100)
             
             self.actor_optimizer.step()
                        
-            
+            # print(actor_loss, critic_loss, angle_term_1.mean(), angle_term_2.mean())
             # Soft update the target networks
             for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
@@ -388,6 +397,13 @@ class MO_TD3_HER:
             if (self.total_it % 1000) == 0:
                 writer.add_scalar('Loss/Actor_Loss'.format(), actor_loss, self.total_it)
                 writer.add_scalar('Loss/Critic_Loss'.format(), critic_loss, self.total_it)
+                writer.add_scalar('Loss/Angle_term_1'.format(), angle_term_1.mean(), self.total_it)
+                writer.add_scalar('Loss/Angle_term_2'.format(), angle_term_2.mean(), self.total_it)
+                writer.add_scalar('Loss/Angle_term'.format(), angle_term.mean(), self.total_it)
+                writer.add_scalar('Loss/actor_norm'.format(), actor_total_norm, self.total_it)
+                writer.add_scalar('Loss/critic_norm'.format(), critic_total_norm, self.total_it)
+
+
         
     
     def reset_preference(self):
@@ -538,13 +554,19 @@ class MO_TD3_HER_Key:
        # Compute Critic Loss
         critic_loss = F.smooth_l1_loss(current_Q1, target_Q) +  F.smooth_l1_loss(current_Q2, target_Q)
 
+        critic_total_norm = 0
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        for p in self.critic.parameters():
+            param_norm = p.grad.detach().data.norm(2)
+            critic_total_norm += param_norm.item() ** 2
+        critic_total_norm = critic_total_norm ** 0.5
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm= 100)
         self.critic_optimizer.step()
         # return
         # Delayed policy updates
+
         if self.total_it % self.policy_freq == 0:
             # Compute Actor Loss
             Q = self.critic.Q1(state_batch, w_batch, self.actor(state_batch,w_batch))
@@ -557,7 +579,6 @@ class MO_TD3_HER_Key:
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm= 100)
             self.actor_optimizer.step()
                        
-            
             # Soft update the target networks
             for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
@@ -569,4 +590,5 @@ class MO_TD3_HER_Key:
             if writer:
                 writer.add_scalar('Loss/Actor_Loss'.format(), actor_loss, self.total_it)
                 writer.add_scalar('Loss/Critic_Loss'.format(), critic_loss, self.total_it)
+                writer.add_scalar('Loss/Critic_Loss'.format(), critic_total_norm, self.total_it)
         

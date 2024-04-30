@@ -77,7 +77,7 @@ def child_process(preference, p_id,train_queue):
         args = lib.utilities.settings.HYPERPARAMS["Walker2d_MO_TD3_HER_Key"]
         args.p_id = p_id
         
-        track = True
+        track = False
         writer = None
         if track:
             import wandb

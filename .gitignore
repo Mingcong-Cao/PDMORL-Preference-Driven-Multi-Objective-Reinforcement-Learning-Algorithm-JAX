@@ -1,2 +1,4 @@
 **/wandb
 **/events.out.tfevents*
+**/runs
+**/Figures
