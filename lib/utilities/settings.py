@@ -80,7 +80,7 @@ HYPERPARAMS = {
         'layer_N_actor':    1,
         'actor_loss_coeff':    10,
         'hidden_size':      400,
-        'seed':             2
+        'seed':             1
     }),
 
     'Walker2d_MO_TD3_HER_Key': SimpleNamespace(**{
@@ -104,7 +104,7 @@ HYPERPARAMS = {
         'layer_N_critic':   1,
         'layer_N_actor':    1,
         'hidden_size':      400,
-        'seed':             2
+        'seed':             1
     }),
 
     'HalfCheetah_MO_TD3_HER': SimpleNamespace(**{

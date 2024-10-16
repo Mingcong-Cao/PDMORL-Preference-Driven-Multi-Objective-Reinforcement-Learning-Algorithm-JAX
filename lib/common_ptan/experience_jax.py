@@ -188,8 +188,8 @@ class ExperienceReplayBuffer_HER_MO(ExperienceReplayBuffer):
 
         else:
            
-            for _i in range(self.args.weight_num+1): 
-                self.buffer.pop(0)
+            # for _i in range(self.args.weight_num+1): 
+            del self.buffer[0: self.args.weight_num+1]
             self.buffer.append(samples[-1])
             for i in range(self.args.weight_num):
                 sample_prime = samples[i]

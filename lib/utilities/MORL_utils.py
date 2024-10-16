@@ -325,7 +325,7 @@ def generate_w_batch_test(args, step_size):
     
     return w_batch_test
 
-def plot_objs(args,objs,ext=''):
+def plot_objs(args,objs,figure_dir, ext=''):
     non_dom = NonDominatedSorting().do(-objs, only_non_dominated_front=True)        
     objs_plot = objs[non_dom]
     plt.plot(objs_plot[:,0],objs_plot[:,1],'rs', markersize=2)
@@ -333,8 +333,8 @@ def plot_objs(args,objs,ext=''):
     plt.ylabel("Energy Efficiency")
     plt.title('{} - Pareto Front'.format(args.scenario_name))
     if args.scenario_name == "MO-Walker2d-v2":
-        plt.ylim(0, 2700)
-        plt.xlim(0, 2700)
+        plt.ylim(-100, 2700)
+        plt.xlim(-100, 2700)
     elif args.scenario_name == "MO-HalfCheetah-v2":
         plt.ylim(0, 2700)
         plt.xlim(0, 2700)
@@ -347,7 +347,10 @@ def plot_objs(args,objs,ext=''):
     elif args.scenario_name == "MO-Hopper-v2":
         plt.ylim(0, 6000)
         plt.xlim(0, 5000)
-    plt.savefig('Figures/{}/{}-ParetoFront, ExpNoise={}, PolicyUpdateFreq={}_{}.png'.format(args.scenario_name,args.plot_name,args.expl_noise,args.policy_freq,ext))
+    plt.savefig('{}/{}-ParetoFront, ExpNoise={}, PolicyUpdateFreq={}_{}.png'.format(figure_dir, args.plot_name,args.expl_noise,args.policy_freq,ext))
+    numpy_filename = '{}/{}-ParetoFront, ExpNoise={}, PolicyUpdateFreq={}_{}.npy'.format(figure_dir,args.plot_name,args.expl_noise,args.policy_freq,ext)
+    with open(numpy_filename, 'wb') as f:
+        np.save(f, objs)
     plt.close()
     
 

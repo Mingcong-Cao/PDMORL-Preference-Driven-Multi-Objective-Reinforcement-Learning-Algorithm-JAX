@@ -27,6 +27,8 @@ from scipy.interpolate import RBFInterpolator
 from collections import namedtuple, deque
 import copy
 
+from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+
 #jax packages
 from lib.models.networks_jax import Actor, Critic
 import jax, flax, optax
@@ -132,8 +134,8 @@ def generate_learning_functions(
             #originally we use smooth_l1_loss in pytorch with beta = 1.
             #here we replace it with huber loss with del = 1, which is identical
             current_Q1, current_Q2 = critic_state.apply_fn(params, states, w_batch, actions)
-            angle_term_1 = jnp.arccos(cosine_similarity(w_batch_interp, current_Q1).clip(0,0.9999)) * 180 / jnp.pi #rad to degree
-            angle_term_2 = jnp.arccos(cosine_similarity(w_batch_interp, current_Q2).clip(0,0.9999)) * 180 / jnp.pi
+            angle_term_1 = jnp.array([0]) #jnp.arccos(cosine_similarity(w_batch_interp, current_Q1).clip(0,0.9999)) * 180 / jnp.pi #rad to degree
+            angle_term_2 = jnp.array([0])  #jnp.arccos(cosine_similarity(w_batch_interp, current_Q2).clip(0,0.9999)) * 180 / jnp.pi
             return (optax.huber_loss(current_Q1, target_Q) + optax.huber_loss(current_Q2, target_Q)).mean() + \
                 angle_term_1.mean() + angle_term_2.mean() , (current_Q1.mean(), current_Q2.mean(), angle_term_1.mean(), angle_term_2.mean())
         
@@ -155,7 +157,7 @@ def generate_learning_functions(
         def actor_loss(params):
             Q1_critic = critic_state.apply_fn(critic_state.params, states, w_batch, actor_state.apply_fn(params, states, w_batch),  method = critic_state.Q1)
             wQ1 = jax.lax.batch_matmul(jnp.expand_dims(w_batch, 1), jnp.expand_dims(Q1_critic, 2)).squeeze(1)
-            angle_term = jnp.arccos(cosine_similarity(w_batch_interp, Q1_critic).clip(0,0.9999)) * 180 / jnp.pi
+            angle_term = jnp.array([0])  #jnp.arccos(cosine_similarity(w_batch_interp, Q1_critic).clip(0,0.9999)) * 180 / jnp.pi
             return (-wQ1).mean() + actor_loss_coeff * angle_term.mean(), angle_term.mean()
         #below in this function not modified yet
         (actor_loss_value, angle_term_mean), grads = jax.value_and_grad(actor_loss, has_aux=True)(actor_state.params)

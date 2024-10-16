@@ -41,7 +41,7 @@ def child_process(actor, critic, args, train_queue,p_id,w_batch):
         args.p_id = p_id
 
         # Initialize agent and source
-        agent = ptan.agent.MO_TD3_HER(actor,critic, args.device, args)
+        agent = ptan.agent_sparsity.MO_TD3_HER(actor,critic, args.device, args)
         exp_source =  ptan.experience.MORLExperienceSource(env, agent, args, steps_count=1)
         done_episodes = 0
         time_step = 0
@@ -62,6 +62,8 @@ if __name__ == "__main__":
     args = lib.utilities.settings.HYPERPARAMS[name]
     args.plot_name  = name
     PROCESSES_COUNT = args.process_count
+    #TODO: Setting Process count to 1. For debug use only, need to remove later
+    # PROCESSES_COUNT = 1
     torch.set_num_threads(PROCESSES_COUNT)
 
     torch.manual_seed(args.seed)
@@ -134,7 +136,7 @@ if __name__ == "__main__":
         train_queue_list[p_id].join()
  
     #Initialize RL agent
-    agent_main = ptan.agent.MO_TD3_HER(actor,critic, device, args)
+    agent_main = ptan.agent_sparsity.MO_TD3_HER(actor,critic, device, args)
     
     #Initialize Experience Source and Replay Buffer
     exp_source_main = ptan.experience.MORLExperienceSource(env_main, agent_main, args, steps_count=1)

@@ -120,12 +120,12 @@ class Critic(nn.Module):
             x1 = nn.relu(x1)
         q1 = self.affine_out_1(x1)
 
-        x2 = self.affine_in_1(x)
+        x2 = self.affine_in_2(x)
         x2 = nn.relu(x2)
         for layer in self.affine_hid_2:
             x2 = layer(x2)
             x2 = nn.relu(x2)
-        q2 = self.affine_out_1(x2)
+        q2 = self.affine_out_2(x2)
 
         return q1, q2
     
